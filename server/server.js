@@ -12,7 +12,14 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.API_KEY);
+if (!process.env.API_KEY) {
+    console.error("CRITICAL: API_KEY is missing from environment variables!");
+}
+
+const genAI = new GoogleGenerativeAI(process.env.API_KEY || "dummy_key");
+
+// Diagnostic: Log what genAI actually is
+console.log("Gemini SDK Initialized. Available methods:", Object.keys(genAI));
 
 // Helpers
 const getBioPrompt = (bio) => `Transform this boring TikTok bio into a high-conversion niche authority bio: "${bio}". Use emojis, focus on results/authority, and include a clear hook or call to action. Return only the optimized bio text.`;
@@ -30,6 +37,7 @@ const extractJson = (text) => {
         if (match) return JSON.parse(match[0]);
         return JSON.parse(text);
     } catch (e) {
+        console.error("JSON Parse Error on text:", text);
         throw new Error("Could not parse AI response as JSON");
     }
 };
