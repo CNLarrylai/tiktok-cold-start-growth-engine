@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { fixBio, generateHook, identifyUser } from './services/geminiService';
 import { BioComparison, ScriptHook, LiveMilestone } from './types';
+import { Analytics } from "@vercel/analytics/react"
 
 const getDeviceId = () => {
   let id = localStorage.getItem('sg_device_id');
@@ -19,7 +20,7 @@ const LIVE_RUNSHEET: LiveMilestone[] = [
   { minute: 30, title: "CONVERSION CALL", description: "Drive traffic to the link in bio. Close the deal while the energy is high.", icon: "link", type: 'conversion' }
 ];
 
-const APP_VERSION = "v1.2-secure";
+const APP_VERSION = "v1.2.1-analytics";
 
 export default function App() {
   const [bioInput, setBioInput] = useState("I post lifestyle, tech, and my dog. Welcome to my page! 📍 NYC");
@@ -352,6 +353,7 @@ export default function App() {
           <div className="w-px h-16 bg-gradient-to-b from-primary/50 to-transparent"></div>
         </div>
       </div>
+      <Analytics />
     </div>
   );
 }
