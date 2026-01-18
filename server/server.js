@@ -2,7 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+// NEW SDK IMPORT
+const { GoogleGenAI } = require("@google/genai");
 const db = require('./database');
 
 const app = express();
@@ -27,42 +28,46 @@ const securityCheck = (req, res, next) => {
     }
 };
 
-// Initialize Gemini
+// Initialize Gemini (New SDK)
 if (!process.env.API_KEY) {
     console.error("CRITICAL: API_KEY is missing!");
 } else {
     console.log(`API Key detected (starts with: ${process.env.API_KEY.substring(0, 4)}...)`);
 }
 
-const genAI = new GoogleGenerativeAI(process.env.API_KEY || "dummy_key");
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "dummy_key" });
 
-// Robust AI Helper
-const generateWithFallback = async (prompt, generationConfig = {}) => {
+// Robust AI Helper (Refactored for @google/genai SDK)
+const generateWithFallback = async (prompt, modelConfig = {}) => {
     // Comprehensive priority list as requested by user
+    // Note: Gemini 3 and Gemma 3 preview models are experimental
     const modelsToTry = [
-        "gemini-3-flash",
+        "gemini-3-flash", // Preview
         "gemma-3-27b",
         "gemma-3-12b",
         "gemma-3-4b",
         "gemma-3-2b",
         "gemma-3-1b",
-        "gemini-1.5-flash", // Safety Net 1 (Confirmed Quota)
-        "gemini-2.0-flash"  // Safety Net 2
+        "gemini-1.5-flash", // Proven fallback
+        "gemini-2.0-flash"
     ];
+
     let lastError = null;
 
     for (const modelName of modelsToTry) {
         try {
-            console.log(`[AI Request] Attempting with ${modelName}...`);
-            const model = genAI.getGenerativeModel({ model: modelName });
+            console.log(`[AI Request V2] Attempting with ${modelName}...`);
 
-            const result = await model.generateContent({
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                generationConfig: generationConfig
+            // New SDK Syntax
+            const response = await ai.models.generateContent({
+                model: modelName,
+                contents: [
+                    { role: 'user', parts: [{ text: prompt }] }
+                ],
+                config: modelConfig
             });
 
-            const response = await result.response;
-            const text = response.text();
+            const text = response.text;
 
             if (!text) throw new Error("Empty response from AI");
 
@@ -71,8 +76,7 @@ const generateWithFallback = async (prompt, generationConfig = {}) => {
         } catch (e) {
             lastError = e;
             console.warn(`[AI Warning] ${modelName} failed: ${e.message}`);
-            // If it's a quota (429) or not found (404), try next model
-            if (e.status === 429 || e.status === 404 || e.message?.includes('quota')) continue;
+            // Continue on errors (404, 429, 403, etc.)
         }
     }
     throw lastError || new Error("All AI models failed or exhausted.");
@@ -135,7 +139,7 @@ app.post('/api/fix-bio', securityCheck, async (req, res) => {
 
     try {
         const rawResponse = await generateWithFallback(getBioPrompt(bioInput));
-        let optimizedBio = rawResponse.trim();
+        let optimizedBio = rawResponse ? rawResponse.trim() : "";
         optimizedBio = optimizedBio.replace(/^["']|["']$/g, '').replace(/^(Here is your|Optimized|Result):?\s*/i, '');
 
         try {
@@ -161,6 +165,7 @@ app.post('/api/generate-hook', securityCheck, async (req, res) => {
 
     try {
         const prompt = `You are a viral TikTok script writer. Generate a high-conversion JSON hook for "${nicheInput}" with keys: result, topic, action. JSON ONLY.`;
+        // New SDK config structure
         const rawResponse = await generateWithFallback(prompt, { responseMimeType: "application/json" });
         const hookData = extractJson(rawResponse);
 
@@ -181,7 +186,6 @@ app.post('/api/generate-hook', securityCheck, async (req, res) => {
         });
     }
 });
-
 
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
