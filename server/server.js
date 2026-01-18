@@ -45,7 +45,9 @@ const generateWithFallback = async (prompt, generationConfig = {}) => {
         "gemma-3-12b",
         "gemma-3-4b",
         "gemma-3-2b",
-        "gemma-3-1b"
+        "gemma-3-1b",
+        "gemini-1.5-flash", // Safety Net 1 (Confirmed Quota)
+        "gemini-2.0-flash"  // Safety Net 2
     ];
     let lastError = null;
 
