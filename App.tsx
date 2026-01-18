@@ -60,8 +60,8 @@ export default function App() {
         if (history.data.nicheInput) setNicheInput(history.data.nicheInput);
         if (history.data.hook) setHook(history.data.hook);
       } else {
-        // New user or no history, generate default hook
-        handleGenerateHook();
+        // New user or no history - don't auto-generate to save quota
+        // handleGenerateHook();
       }
     };
     loadData();
@@ -271,8 +271,8 @@ export default function App() {
                     <React.Fragment key={idx}>
                       <div className="flex flex-col items-center gap-1 pt-1">
                         <div className={`size-12 rounded-2xl flex items-center justify-center transition-all ${step.type === 'conversion'
-                            ? 'bg-primary shadow-[0_0_20px_rgba(254,42,84,0.4)] text-white'
-                            : 'bg-white/5 border border-white/10 text-white/60'
+                          ? 'bg-primary shadow-[0_0_20px_rgba(254,42,84,0.4)] text-white'
+                          : 'bg-white/5 border border-white/10 text-white/60'
                           }`}>
                           <span className="material-symbols-outlined">{step.icon}</span>
                         </div>

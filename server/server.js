@@ -12,14 +12,10 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // Initialize Gemini
-if (!process.env.API_KEY) {
-    console.error("CRITICAL: API_KEY is missing from environment variables!");
-}
-
-const genAI = new GoogleGenerativeAI(process.env.API_KEY || "dummy_key");
+const genAI = new GoogleGenerativeAI(process.env.API_KEY);
 
 // Diagnostic: Log what genAI actually is
-console.log("Gemini SDK Initialized. Available methods:", Object.keys(genAI));
+console.log("Gemini SDK Initialized. Checking connectivity...");
 
 // Helpers
 const getBioPrompt = (bio) => `Transform this boring TikTok bio into a high-conversion niche authority bio: "${bio}". Use emojis, focus on results/authority, and include a clear hook or call to action. Return only the optimized bio text.`;
@@ -90,7 +86,7 @@ app.post('/api/fix-bio', async (req, res) => {
     if (!deviceId) return res.status(400).json({ error: 'Device ID missing' });
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const result = await model.generateContent(getBioPrompt(bioInput));
         const response = await result.response;
         let optimizedBio = response.text().trim();
@@ -129,7 +125,7 @@ app.post('/api/generate-hook', async (req, res) => {
     console.log(`[Generate Hook] Niche: ${nicheInput}, Device: ${deviceId}`);
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
         const prompt = `You are a viral TikTok script writer.
 Generate a high-conversion "Mad-Libs" style hook for a video about "${nicheInput}".
