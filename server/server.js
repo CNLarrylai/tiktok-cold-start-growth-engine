@@ -41,18 +41,9 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "dummy_key" });
 (async () => {
     try {
         console.log("--- DEBUG: Fetching available models ---");
-        // Note: SDK v2 listing syntax might vary, we try standard pattern
-        // If this throws, it won't crash the server
         const response = await ai.models.list();
-        // Iterate if it's an async iterable or array
-        if (response && typeof response[Symbol.iterator] === 'function') {
-            for (const model of response) {
-                console.log(`Available Model: ${model.name} (${model.version || 'v?'})`);
-            }
-        } else if (response && response.models) {
-            response.models.forEach(m => console.log(`Available Model: ${m.name}`));
-        } else {
-            console.log("Model list response structure unknown:", Object.keys(response));
+        if (response && response.models) {
+            console.log(`Found ${response.models.length} accessible models.`);
         }
         console.log("--- DEBUG END ---");
     } catch (e) {
@@ -62,22 +53,20 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "dummy_key" });
 
 // Robust AI Helper (Refactored for @google/genai SDK)
 const generateWithFallback = async (prompt, modelConfig = {}) => {
-    // 1. User's Wishlist (Experimental)
-    // 2. Standard Aliases
-    // 3. Specific Version Strings (The likely fix for 404s)
+    // Corrected Priority List based on API Dump
+    // Findings:
+    // - Gemma 3 models require '-it' suffix (Instruction Tuned)
+    // - Gemini 3 is NOT in the list
+    // - Gemini 2.0 Flash is available
     const modelsToTry = [
-        "gemini-3-flash",
-        "gemma-3-27b",
-        "gemma-3-12b",
-        "gemma-3-4b",
-        "gemini-2.0-flash-exp",
+        "gemma-3-27b-it",
+        "gemma-3-12b-it",
+        "gemma-3-4b-it",
+        "gemma-3-1b-it",
         "gemini-2.0-flash",
         "gemini-1.5-flash",
         "gemini-1.5-flash-001", // Often the actual system name
-        "gemini-1.5-flash-002",
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-pro",
-        "gemini-1.0-pro"
+        "gemini-1.5-flash-latest"
     ];
 
     let lastError = null;
