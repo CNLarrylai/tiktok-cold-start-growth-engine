@@ -27,21 +27,21 @@ Make it punchy and high-retention.`;
 // ---------------------------------------------------------
 // User Identification / History
 // ---------------------------------------------------------
-app.post('/api/identify', (req, res) => {
+app.post('/api/identify', async (req, res) => {
     const { deviceId } = req.body;
     if (!deviceId) {
         return res.status(400).json({ error: 'Device ID required' });
     }
 
-    db.get("SELECT * FROM users WHERE user_id = ?", [deviceId], (err, row) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
+    try {
+        const row = await db.get("SELECT * FROM users WHERE user_id = $1", [deviceId]);
 
         if (row) {
             // Return existing data
             let hookData = null;
-            try { hookData = JSON.parse(row.hook_data); } catch (e) { }
+            try {
+                hookData = typeof row.hook_data === 'string' ? JSON.parse(row.hook_data) : row.hook_data;
+            } catch (e) { }
 
             return res.json({
                 found: true,
@@ -54,14 +54,13 @@ app.post('/api/identify', (req, res) => {
             });
         } else {
             // New user, create entry
-            const stmt = db.prepare("INSERT INTO users (user_id) VALUES (?)");
-            stmt.run(deviceId, (err) => {
-                if (err) return res.status(500).json({ error: err.message });
-                res.json({ found: false });
-            });
-            stmt.finalize();
+            await db.run("INSERT INTO users (user_id) VALUES ($1)", [deviceId]);
+            res.json({ found: false });
         }
-    });
+    } catch (err) {
+        console.error("Identify Error:", err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ---------------------------------------------------------
@@ -79,13 +78,14 @@ app.post('/api/fix-bio', async (req, res) => {
         const optimizedBio = response.text().trim();
 
         // Save to DB
-        db.run(
-            "UPDATE users SET bio_input = ?, optimized_bio = ?, last_updated = CURRENT_TIMESTAMP WHERE user_id = ?",
-            [bioInput, optimizedBio, deviceId],
-            (err) => {
-                if (err) console.error("DB Save Error:", err);
-            }
-        );
+        try {
+            await db.run(
+                "UPDATE users SET bio_input = $1, optimized_bio = $2, last_updated = CURRENT_TIMESTAMP WHERE user_id = $3",
+                [bioInput, optimizedBio, deviceId]
+            );
+        } catch (err) {
+            console.error("DB Save Error:", err);
+        }
 
         res.json({ result: optimizedBio });
     } catch (error) {
@@ -117,13 +117,14 @@ app.post('/api/generate-hook', async (req, res) => {
         const hookData = JSON.parse(response.text());
 
         // Save to DB
-        db.run(
-            "UPDATE users SET niche_input = ?, hook_data = ?, last_updated = CURRENT_TIMESTAMP WHERE user_id = ?",
-            [nicheInput, JSON.stringify(hookData), deviceId],
-            (err) => {
-                if (err) console.error("DB Save Error:", err);
-            }
-        );
+        try {
+            await db.run(
+                "UPDATE users SET niche_input = $1, hook_data = $2, last_updated = CURRENT_TIMESTAMP WHERE user_id = $3",
+                [nicheInput, JSON.stringify(hookData), deviceId]
+            );
+        } catch (err) {
+            console.error("DB Save Error:", err);
+        }
 
         res.json(hookData);
     } catch (error) {
