@@ -38,8 +38,15 @@ const genAI = new GoogleGenerativeAI(process.env.API_KEY || "dummy_key");
 
 // Robust AI Helper
 const generateWithFallback = async (prompt, generationConfig = {}) => {
-    // Priority list based on user's authorized quota
-    const modelsToTry = ["gemma-3-4b", "gemini-1.5-flash", "gemini-1.5-flash-latest"];
+    // Comprehensive priority list as requested by user
+    const modelsToTry = [
+        "gemini-3-flash",
+        "gemma-3-27b",
+        "gemma-3-12b",
+        "gemma-3-4b",
+        "gemma-3-2b",
+        "gemma-3-1b"
+    ];
     let lastError = null;
 
     for (const modelName of modelsToTry) {
