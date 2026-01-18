@@ -19,7 +19,7 @@ const LIVE_RUNSHEET: LiveMilestone[] = [
   { minute: 30, title: "CONVERSION CALL", description: "Drive traffic to the link in bio. Close the deal while the energy is high.", icon: "link", type: 'conversion' }
 ];
 
-const APP_VERSION = "v1.0-41c7a2d";
+const APP_VERSION = "v1.1-404fix";
 
 export default function App() {
   const [bioInput, setBioInput] = useState("I post lifestyle, tech, and my dog. Welcome to my page! 📍 NYC");

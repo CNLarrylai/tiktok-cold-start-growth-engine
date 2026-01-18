@@ -86,7 +86,7 @@ app.post('/api/fix-bio', async (req, res) => {
     if (!deviceId) return res.status(400).json({ error: 'Device ID missing' });
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
         const result = await model.generateContent(getBioPrompt(bioInput));
         const response = await result.response;
         let optimizedBio = response.text().trim();
@@ -125,7 +125,7 @@ app.post('/api/generate-hook', async (req, res) => {
     console.log(`[Generate Hook] Niche: ${nicheInput}, Device: ${deviceId}`);
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
         const prompt = `You are a viral TikTok script writer.
 Generate a high-conversion "Mad-Libs" style hook for a video about "${nicheInput}".
@@ -161,11 +161,11 @@ Requirements:
     } catch (error) {
         console.error("CRITICAL Gemini Hook Error:", error);
 
-        // Return a mock that explains the error slightly, to help us debug
+        // Return a mock that is readable
         const mock = {
-            result: "work properly",
-            topic: (error.message || "Gemini Connection").substring(0, 30),
-            action: "contacting support"
+            result: "system error",
+            topic: (error.message || "Retry").substring(0, 40),
+            action: "wait 1 minute"
         };
         res.json(mock);
     }
