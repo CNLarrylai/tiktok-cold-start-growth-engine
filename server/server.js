@@ -11,21 +11,53 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-// Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.API_KEY);
+// ---------------------------------------------------------
+// Security Middleware & SDK Initialization
+// ---------------------------------------------------------
+const securityCheck = (req, res, next) => {
+    const isLocal = req.hostname === 'localhost';
+    const securityHeader = req.headers['x-app-servicegrow-security'];
 
-// Diagnostic: Log what genAI actually is
-console.log("Gemini SDK Initialized. Checking connectivity...");
+    // Allow local dev and requests with our special header
+    if (isLocal || securityHeader === 'sg-safe-v1') {
+        next();
+    } else {
+        console.warn(`[Security Block] Blocked request from ${req.hostname} - Header: ${securityHeader}`);
+        res.status(403).json({ error: "Access denied. Valid browser request required." });
+    }
+};
+
+// Initialize Gemini
+if (!process.env.API_KEY) {
+    console.error("CRITICAL: API_KEY is missing!");
+} else {
+    console.log(`API Key detected (starts with: ${process.env.API_KEY.substring(0, 4)}...)`);
+}
+
+const genAI = new GoogleGenerativeAI(process.env.API_KEY || "dummy_key");
+
+// Robust Model Helper
+const getModelWithFallback = async (options = {}) => {
+    const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-flash"];
+    let lastError = null;
+
+    for (const modelName of modelsToTry) {
+        try {
+            console.log(`Trying model: ${modelName}...`);
+            const model = genAI.getGenerativeModel({ model: modelName, ...options });
+            // We do a tiny test call or just return and let the route handle it
+            // For now, let's just returns the model and let the route try generateContent
+            return model;
+        } catch (e) {
+            lastError = e;
+            console.warn(`Model ${modelName} initialization failed:`, e.message);
+        }
+    }
+    throw lastError || new Error("No models available");
+};
 
 // Helpers
 const getBioPrompt = (bio) => `Transform this boring TikTok bio into a high-conversion niche authority bio: "${bio}". Use emojis, focus on results/authority, and include a clear hook or call to action. Return only the optimized bio text.`;
-
-const getHookPrompt = (niche) => `Generate a viral TikTok "Mad-Libs" style hook for the niche: "${niche}". 
-Format your response as a JSON object with these EXACT fields:
-- result: a desirable outcome (e.g. "hitting 10k")
-- topic: a controversial or specific topic (e.g. "shadowbanning")
-- action: a common mistake or negative action (e.g. "using banned hashtags").
-Make it punchy and high-retention. Return ONLY the JSON object.`;
 
 const extractJson = (text) => {
     try {
@@ -41,7 +73,7 @@ const extractJson = (text) => {
 // ---------------------------------------------------------
 // User Identification / History
 // ---------------------------------------------------------
-app.post('/api/identify', async (req, res) => {
+app.post('/api/identify', securityCheck, async (req, res) => {
     const { deviceId } = req.body;
     if (!deviceId) {
         return res.status(400).json({ error: 'Device ID required' });
@@ -80,13 +112,13 @@ app.post('/api/identify', async (req, res) => {
 // ---------------------------------------------------------
 // Fix Bio
 // ---------------------------------------------------------
-app.post('/api/fix-bio', async (req, res) => {
+app.post('/api/fix-bio', securityCheck, async (req, res) => {
     const { bioInput, deviceId } = req.body;
 
     if (!deviceId) return res.status(400).json({ error: 'Device ID missing' });
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = await getModelWithFallback();
         const result = await model.generateContent(getBioPrompt(bioInput));
         const response = await result.response;
         let optimizedBio = response.text().trim();
@@ -107,43 +139,28 @@ app.post('/api/fix-bio', async (req, res) => {
 
         res.json({ result: optimizedBio });
     } catch (error) {
-        console.error("Gemini Error:", error);
+        console.error("Bio Error:", error);
         // Fallback Mock for user experience during rate limits
-        const mockBio = "🚀 Viral Growth Specialist | Helping 10k+ Creators Scale TikTok 📈 | Click below for my Cold-Start Blueprint! 👇";
-        res.json({ result: mockBio });
+        res.json({ result: "🚀 Build your niche authority today! (AI busy, try again in 1 min)" });
     }
 });
 
 // ---------------------------------------------------------
 // Generate Hook
 // ---------------------------------------------------------
-app.post('/api/generate-hook', async (req, res) => {
+app.post('/api/generate-hook', securityCheck, async (req, res) => {
     const { nicheInput, deviceId } = req.body;
 
     if (!deviceId) return res.status(400).json({ error: 'Device ID missing' });
 
-    console.log(`[Generate Hook] Niche: ${nicheInput}, Device: ${deviceId}`);
-
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = await getModelWithFallback();
 
-        const prompt = `You are a viral TikTok script writer.
-Generate a high-conversion "Mad-Libs" style hook for a video about "${nicheInput}".
-Return ONLY a JSON object with these exact keys:
-- result: a desirable outcome (e.g. "hitting 10k")
-- topic: a controversy or specific strategy (e.g. "shadowbanning")
-- action: a common mistake or negative action (e.g. "using random hashtags")
-
-Requirements:
-- JSON only, no markdown, no explanations.
-- Language: English (or same as niche input).
-- Punchy and high-retention.`;
+        const prompt = `You are a viral TikTok script writer. Generate a high-conversion JSON hook for "${nicheInput}" with keys: result, topic, action. JSON ONLY.`;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
         const rawText = response.text();
-
-        console.log(`[Gemini Raw Response]: ${rawText}`);
 
         const hookData = extractJson(rawText);
 
@@ -159,13 +176,13 @@ Requirements:
 
         res.json(hookData);
     } catch (error) {
-        console.error("CRITICAL Gemini Hook Error:", error);
+        console.error("Hook Error:", error);
 
         // Return a mock that is readable
         const mock = {
-            result: "system error",
-            topic: (error.message || "Retry").substring(0, 40),
-            action: "wait 1 minute"
+            result: "Viral Growth",
+            topic: (error.message || "Stability").substring(0, 40),
+            action: "wait 60s"
         };
         res.json(mock);
     }
