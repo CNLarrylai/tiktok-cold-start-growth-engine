@@ -37,19 +37,47 @@ if (!process.env.API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "dummy_key" });
 
+// Debug: List available models on startup
+(async () => {
+    try {
+        console.log("--- DEBUG: Fetching available models ---");
+        // Note: SDK v2 listing syntax might vary, we try standard pattern
+        // If this throws, it won't crash the server
+        const response = await ai.models.list();
+        // Iterate if it's an async iterable or array
+        if (response && typeof response[Symbol.iterator] === 'function') {
+            for (const model of response) {
+                console.log(`Available Model: ${model.name} (${model.version || 'v?'})`);
+            }
+        } else if (response && response.models) {
+            response.models.forEach(m => console.log(`Available Model: ${m.name}`));
+        } else {
+            console.log("Model list response structure unknown:", Object.keys(response));
+        }
+        console.log("--- DEBUG END ---");
+    } catch (e) {
+        console.warn("Failed to list models on startup (Non-fatal):", e.message);
+    }
+})();
+
 // Robust AI Helper (Refactored for @google/genai SDK)
 const generateWithFallback = async (prompt, modelConfig = {}) => {
-    // Comprehensive priority list as requested by user
-    // Note: Gemini 3 and Gemma 3 preview models are experimental
+    // 1. User's Wishlist (Experimental)
+    // 2. Standard Aliases
+    // 3. Specific Version Strings (The likely fix for 404s)
     const modelsToTry = [
-        "gemini-3-flash", // Preview
+        "gemini-3-flash",
         "gemma-3-27b",
         "gemma-3-12b",
         "gemma-3-4b",
-        "gemma-3-2b",
-        "gemma-3-1b",
-        "gemini-1.5-flash", // Proven fallback
-        "gemini-2.0-flash"
+        "gemini-2.0-flash-exp",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-001", // Often the actual system name
+        "gemini-1.5-flash-002",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-pro",
+        "gemini-1.0-pro"
     ];
 
     let lastError = null;
@@ -58,7 +86,6 @@ const generateWithFallback = async (prompt, modelConfig = {}) => {
         try {
             console.log(`[AI Request V2] Attempting with ${modelName}...`);
 
-            // New SDK Syntax
             const response = await ai.models.generateContent({
                 model: modelName,
                 contents: [
@@ -68,7 +95,6 @@ const generateWithFallback = async (prompt, modelConfig = {}) => {
             });
 
             const text = response.text;
-
             if (!text) throw new Error("Empty response from AI");
 
             console.log(`[AI Success] Used ${modelName}`);
@@ -76,7 +102,7 @@ const generateWithFallback = async (prompt, modelConfig = {}) => {
         } catch (e) {
             lastError = e;
             console.warn(`[AI Warning] ${modelName} failed: ${e.message}`);
-            // Continue on errors (404, 429, 403, etc.)
+            // Retry loop continues...
         }
     }
     throw lastError || new Error("All AI models failed or exhausted.");
@@ -165,7 +191,6 @@ app.post('/api/generate-hook', securityCheck, async (req, res) => {
 
     try {
         const prompt = `You are a viral TikTok script writer. Generate a high-conversion JSON hook for "${nicheInput}" with keys: result, topic, action. JSON ONLY.`;
-        // New SDK config structure
         const rawResponse = await generateWithFallback(prompt, { responseMimeType: "application/json" });
         const hookData = extractJson(rawResponse);
 
