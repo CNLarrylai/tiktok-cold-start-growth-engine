@@ -36,24 +36,37 @@ if (!process.env.API_KEY) {
 
 const genAI = new GoogleGenerativeAI(process.env.API_KEY || "dummy_key");
 
-// Robust Model Helper
-const getModelWithFallback = async (options = {}) => {
-    const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-flash"];
+// Robust AI Helper
+const generateWithFallback = async (prompt, generationConfig = {}) => {
+    // Priority list based on user's authorized quota
+    const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash"];
     let lastError = null;
 
     for (const modelName of modelsToTry) {
         try {
-            console.log(`Trying model: ${modelName}...`);
-            const model = genAI.getGenerativeModel({ model: modelName, ...options });
-            // We do a tiny test call or just return and let the route handle it
-            // For now, let's just returns the model and let the route try generateContent
-            return model;
+            console.log(`[AI Request] Attempting with ${modelName}...`);
+            const model = genAI.getGenerativeModel({ model: modelName });
+
+            const result = await model.generateContent({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: generationConfig
+            });
+
+            const response = await result.response;
+            const text = response.text();
+
+            if (!text) throw new Error("Empty response from AI");
+
+            console.log(`[AI Success] Used ${modelName}`);
+            return text;
         } catch (e) {
             lastError = e;
-            console.warn(`Model ${modelName} initialization failed:`, e.message);
+            console.warn(`[AI Warning] ${modelName} failed: ${e.message}`);
+            // If it's a quota (429) or not found (404), try next model
+            if (e.status === 429 || e.status === 404 || e.message?.includes('quota')) continue;
         }
     }
-    throw lastError || new Error("No models available");
+    throw lastError || new Error("All AI models failed or exhausted.");
 };
 
 // Helpers
@@ -75,15 +88,11 @@ const extractJson = (text) => {
 // ---------------------------------------------------------
 app.post('/api/identify', securityCheck, async (req, res) => {
     const { deviceId } = req.body;
-    if (!deviceId) {
-        return res.status(400).json({ error: 'Device ID required' });
-    }
+    if (!deviceId) return res.status(400).json({ error: 'Device ID required' });
 
     try {
         const row = await db.get("SELECT * FROM users WHERE user_id = $1", [deviceId]);
-
         if (row) {
-            // Return existing data
             let hookData = null;
             try {
                 hookData = typeof row.hook_data === 'string' ? JSON.parse(row.hook_data) : row.hook_data;
@@ -99,7 +108,6 @@ app.post('/api/identify', securityCheck, async (req, res) => {
                 }
             });
         } else {
-            // New user, create entry
             await db.run("INSERT INTO users (user_id) VALUES ($1)", [deviceId]);
             res.json({ found: false });
         }
@@ -114,33 +122,23 @@ app.post('/api/identify', securityCheck, async (req, res) => {
 // ---------------------------------------------------------
 app.post('/api/fix-bio', securityCheck, async (req, res) => {
     const { bioInput, deviceId } = req.body;
-
     if (!deviceId) return res.status(400).json({ error: 'Device ID missing' });
 
     try {
-        const model = await getModelWithFallback();
-        const result = await model.generateContent(getBioPrompt(bioInput));
-        const response = await result.response;
-        let optimizedBio = response.text().trim();
+        const rawResponse = await generateWithFallback(getBioPrompt(bioInput));
+        let optimizedBio = rawResponse.trim();
+        optimizedBio = optimizedBio.replace(/^["']|["']$/g, '').replace(/^(Here is your|Optimized|Result):?\s*/i, '');
 
-        // Clean up common AI chatter or wrapping quotes
-        optimizedBio = optimizedBio.replace(/^["']|["']$/g, '');
-        optimizedBio = optimizedBio.replace(/^(Here is your|Optimized|Result):?\s*/i, '');
-
-        // Save to DB
         try {
             await db.run(
                 "UPDATE users SET bio_input = $1, optimized_bio = $2, last_updated = CURRENT_TIMESTAMP WHERE user_id = $3",
                 [bioInput, optimizedBio, deviceId]
             );
-        } catch (err) {
-            console.error("DB Save Error:", err);
-        }
+        } catch (err) { }
 
         res.json({ result: optimizedBio });
     } catch (error) {
-        console.error("Bio Error:", error);
-        // Fallback Mock for user experience during rate limits
+        console.error("Final Bio Error:", error);
         res.json({ result: "🚀 Build your niche authority today! (AI busy, try again in 1 min)" });
     }
 });
@@ -150,41 +148,28 @@ app.post('/api/fix-bio', securityCheck, async (req, res) => {
 // ---------------------------------------------------------
 app.post('/api/generate-hook', securityCheck, async (req, res) => {
     const { nicheInput, deviceId } = req.body;
-
     if (!deviceId) return res.status(400).json({ error: 'Device ID missing' });
 
     try {
-        const model = await getModelWithFallback();
-
         const prompt = `You are a viral TikTok script writer. Generate a high-conversion JSON hook for "${nicheInput}" with keys: result, topic, action. JSON ONLY.`;
+        const rawResponse = await generateWithFallback(prompt, { responseMimeType: "application/json" });
+        const hookData = extractJson(rawResponse);
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const rawText = response.text();
-
-        const hookData = extractJson(rawText);
-
-        // Save to DB
         try {
             await db.run(
                 "UPDATE users SET niche_input = $1, hook_data = $2, last_updated = CURRENT_TIMESTAMP WHERE user_id = $3",
                 [nicheInput, JSON.stringify(hookData), deviceId]
             );
-        } catch (err) {
-            console.error("DB Save Error:", err);
-        }
+        } catch (err) { }
 
         res.json(hookData);
     } catch (error) {
-        console.error("Hook Error:", error);
-
-        // Return a mock that is readable
-        const mock = {
+        console.error("Final Hook Error:", error);
+        res.json({
             result: "Viral Growth",
             topic: (error.message || "Stability").substring(0, 40),
             action: "wait 60s"
-        };
-        res.json(mock);
+        });
     }
 });
 
