@@ -85,7 +85,11 @@ app.post('/api/fix-bio', async (req, res) => {
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
         const result = await model.generateContent(getBioPrompt(bioInput));
         const response = await result.response;
-        const optimizedBio = response.text().trim();
+        let optimizedBio = response.text().trim();
+
+        // Clean up common AI chatter or wrapping quotes
+        optimizedBio = optimizedBio.replace(/^["']|["']$/g, '');
+        optimizedBio = optimizedBio.replace(/^(Here is your|Optimized|Result):?\s*/i, '');
 
         // Save to DB
         try {
