@@ -54,10 +54,6 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "dummy_key" });
 // Robust AI Helper (Refactored for @google/genai SDK)
 const generateWithFallback = async (prompt, modelConfig = {}) => {
     // Corrected Priority List based on API Dump
-    // Findings:
-    // - Gemma 3 models require '-it' suffix (Instruction Tuned)
-    // - Gemini 3 is NOT in the list
-    // - Gemini 2.0 Flash is available
     const modelsToTry = [
         "gemma-3-27b-it",
         "gemma-3-12b-it",
@@ -65,7 +61,7 @@ const generateWithFallback = async (prompt, modelConfig = {}) => {
         "gemma-3-1b-it",
         "gemini-2.0-flash",
         "gemini-1.5-flash",
-        "gemini-1.5-flash-001", // Often the actual system name
+        "gemini-1.5-flash-001",
         "gemini-1.5-flash-latest"
     ];
 
@@ -75,12 +71,19 @@ const generateWithFallback = async (prompt, modelConfig = {}) => {
         try {
             console.log(`[AI Request V2] Attempting with ${modelName}...`);
 
+            // Fix for Gemma: It does not support native JSON mode (responseMimeType)
+            // We strip it out for Gemma models and rely on the prompt text
+            let currentConfig = { ...modelConfig };
+            if (modelName.includes("gemma")) {
+                delete currentConfig.responseMimeType;
+            }
+
             const response = await ai.models.generateContent({
                 model: modelName,
                 contents: [
                     { role: 'user', parts: [{ text: prompt }] }
                 ],
-                config: modelConfig
+                config: currentConfig
             });
 
             const text = response.text;
