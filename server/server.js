@@ -37,7 +37,7 @@ if (!process.env.API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "dummy_key" });
 
-// Debug: List available models on startup
+// Debug on startup
 (async () => {
     try {
         console.log("--- DEBUG: Fetching available models ---");
@@ -45,7 +45,6 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "dummy_key" });
         if (response && response.models) {
             console.log(`Found ${response.models.length} accessible models.`);
         }
-        console.log("--- DEBUG END ---");
     } catch (e) {
         console.warn("Failed to list models on startup (Non-fatal):", e.message);
     }
@@ -53,7 +52,9 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "dummy_key" });
 
 // Robust AI Helper (Refactored for @google/genai SDK)
 const generateWithFallback = async (prompt, modelConfig = {}) => {
-    // Corrected Priority List based on API Dump
+    // 1. Gemma 3 IT (Verified to work locally if JSON mode is removed)
+    // 2. Gemini 2.0 Flash (Verified to exist, may hit quota)
+    // 3. Last Resorts
     const modelsToTry = [
         "gemma-3-27b-it",
         "gemma-3-12b-it",
@@ -61,8 +62,7 @@ const generateWithFallback = async (prompt, modelConfig = {}) => {
         "gemma-3-1b-it",
         "gemini-2.0-flash",
         "gemini-1.5-flash",
-        "gemini-1.5-flash-001",
-        "gemini-1.5-flash-latest"
+        "gemini-1.5-flash-001"
     ];
 
     let lastError = null;
@@ -71,10 +71,10 @@ const generateWithFallback = async (prompt, modelConfig = {}) => {
         try {
             console.log(`[AI Request V2] Attempting with ${modelName}...`);
 
-            // Fix for Gemma: It does not support native JSON mode (responseMimeType)
-            // We strip it out for Gemma models and rely on the prompt text
+            // CRITICAL FIX: Gemma models throw 400 if responseMimeType is set
             let currentConfig = { ...modelConfig };
             if (modelName.includes("gemma")) {
+                console.log(`[AI Config] Stripping JSON mode for ${modelName}`);
                 delete currentConfig.responseMimeType;
             }
 
@@ -94,7 +94,9 @@ const generateWithFallback = async (prompt, modelConfig = {}) => {
         } catch (e) {
             lastError = e;
             console.warn(`[AI Warning] ${modelName} failed: ${e.message}`);
-            // Retry loop continues...
+
+            // If it's a 429 (Quota), we might want to wait a tiny bit? 
+            // Usually falling back to a smaller model is better.
         }
     }
     throw lastError || new Error("All AI models failed or exhausted.");
@@ -105,12 +107,18 @@ const getBioPrompt = (bio) => `Transform this boring TikTok bio into a high-conv
 
 const extractJson = (text) => {
     try {
+        // Find JSON object
         const match = text.match(/\{[\s\S]*\}/);
         if (match) return JSON.parse(match[0]);
         return JSON.parse(text);
     } catch (e) {
         console.error("JSON Parse Error on text:", text);
-        throw new Error("Could not parse AI response as JSON");
+        // Fallback for when AI returns plain text instead of JSON
+        return {
+            result: text.substring(0, 100) + "...",
+            topic: "Growth Tips",
+            action: "Check Bio"
+        };
     }
 };
 
@@ -183,6 +191,7 @@ app.post('/api/generate-hook', securityCheck, async (req, res) => {
 
     try {
         const prompt = `You are a viral TikTok script writer. Generate a high-conversion JSON hook for "${nicheInput}" with keys: result, topic, action. JSON ONLY.`;
+        // Pass JSON config that will be stripped for Gemma
         const rawResponse = await generateWithFallback(prompt, { responseMimeType: "application/json" });
         const hookData = extractJson(rawResponse);
 
