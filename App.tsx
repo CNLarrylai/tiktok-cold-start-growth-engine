@@ -19,6 +19,8 @@ const LIVE_RUNSHEET: LiveMilestone[] = [
   { minute: 30, title: "CONVERSION CALL", description: "Drive traffic to the link in bio. Close the deal while the energy is high.", icon: "link", type: 'conversion' }
 ];
 
+const APP_VERSION = "v1.0-41c7a2d";
+
 export default function App() {
   const [bioInput, setBioInput] = useState("I post lifestyle, tech, and my dog. Welcome to my page! 📍 NYC");
   const [optimizedBio, setOptimizedBio] = useState<string | null>(null);
@@ -76,7 +78,10 @@ export default function App() {
             <div className="size-10 bg-primary rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(254,42,84,0.4)]">
               <span className="material-symbols-outlined text-white text-2xl">trending_up</span>
             </div>
-            <h2 className="text-xl font-black tracking-tighter uppercase italic">ServiceGrow</h2>
+            <div className="flex flex-col">
+              <h2 className="text-xl font-black tracking-tighter uppercase italic leading-none">ServiceGrow</h2>
+              <span className="text-[10px] font-bold text-white/30 tracking-[0.2em]">{APP_VERSION}</span>
+            </div>
           </div>
           <div className="hidden md:flex items-center gap-10">
             <a href="#identity" className="text-sm font-semibold hover:text-primary transition-colors uppercase tracking-widest">Identity</a>
