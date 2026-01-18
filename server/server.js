@@ -121,11 +121,19 @@ app.post('/api/generate-hook', async (req, res) => {
     console.log(`[Generate Hook] Niche: ${nicheInput}, Device: ${deviceId}`);
 
     try {
-        const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash", // Using 1.5-flash for maximum stability with JSON prompts
-        });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-        const prompt = `${getHookPrompt(nicheInput)}\n\nIMPORTANT: Return ONLY a valid JSON object. No Markdown code blocks. No explanations.`;
+        const prompt = `You are a viral TikTok script writer.
+Generate a high-conversion "Mad-Libs" style hook for a video about "${nicheInput}".
+Return ONLY a JSON object with these exact keys:
+- result: a desirable outcome (e.g. "hitting 10k")
+- topic: a controversy or specific strategy (e.g. "shadowbanning")
+- action: a common mistake or negative action (e.g. "using random hashtags")
+
+Requirements:
+- JSON only, no markdown, no explanations.
+- Language: English (or same as niche input).
+- Punchy and high-retention.`;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
@@ -148,11 +156,12 @@ app.post('/api/generate-hook', async (req, res) => {
         res.json(hookData);
     } catch (error) {
         console.error("CRITICAL Gemini Hook Error:", error);
-        // Provide a more dynamic fallback that looks "real"
+
+        // Return a mock that explains the error slightly, to help us debug
         const mock = {
-            result: "viral growth",
-            topic: nicheInput || "TikTok strategy",
-            action: "sleeping on this method"
+            result: "work properly",
+            topic: (error.message || "Gemini Connection").substring(0, 30),
+            action: "contacting support"
         };
         res.json(mock);
     }
