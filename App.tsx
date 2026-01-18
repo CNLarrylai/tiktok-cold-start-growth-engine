@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { fixBio, generateHook, identifyUser } from './services/geminiService';
 import { BioComparison, ScriptHook, LiveMilestone } from './types';
 
@@ -352,6 +353,8 @@ export default function App() {
           <div className="w-px h-16 bg-gradient-to-b from-primary/50 to-transparent"></div>
         </div>
       </div>
+
+      <Analytics />
     </div>
   );
 }
