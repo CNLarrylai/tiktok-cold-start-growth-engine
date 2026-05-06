@@ -1,4 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// In production: same-domain Vercel functions. In local dev: set VITE_API_URL=http://localhost:5000/api
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 const SECURITY_HEADERS = {
   'Content-Type': 'application/json',
   'X-App-ServiceGrow-Security': 'sg-safe-v1'

@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/fix-bio.ts": { "maxDuration": 30 },
+    "api/generate-hook.ts": { "maxDuration": 30 },
+    "api/generate-hashtags.ts": { "maxDuration": 30 },
+    "api/identify.ts": { "maxDuration": 10 }
+  }
+}

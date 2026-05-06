@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { fixBio, generateHook, identifyUser, generateHashtags } from './services/geminiService';
+import React, { useState, useEffect } from 'react';
+import { fixBio, generateHook, generateHashtags } from './services/geminiService';
 import { ScriptHook, LiveMilestone } from './types';
 import { Analytics } from "@vercel/analytics/react"
 
@@ -86,6 +86,8 @@ export default function App() {
     try {
       const fixed = await fixBio(bioInput, deviceId);
       setOptimizedBio(fixed);
+      localStorage.setItem('sg_bio_input', bioInput);
+      localStorage.setItem('sg_optimized_bio', fixed);
     } finally {
       setIsFixingBio(false);
     }
@@ -96,6 +98,8 @@ export default function App() {
     try {
       const h = await generateHook(nicheInput, deviceId);
       setHook(h);
+      localStorage.setItem('sg_niche_input', nicheInput);
+      localStorage.setItem('sg_hook', JSON.stringify(h));
     } finally {
       setIsGeneratingHook(false);
     }
@@ -106,24 +110,26 @@ export default function App() {
     try {
       const tags = await generateHashtags(nicheInput, deviceId);
       setHashtags(tags);
+      localStorage.setItem('sg_niche_input', nicheInput);
+      localStorage.setItem('sg_hashtags', JSON.stringify(tags));
     } finally {
       setIsGeneratingHashtags(false);
     }
   };
 
+  // Load saved state from localStorage on mount
   useEffect(() => {
-    const loadData = async () => {
-      const history = await identifyUser(deviceId);
-      if (history.found && history.data) {
-        if (history.data.bioInput) setBioInput(history.data.bioInput);
-        if (history.data.optimizedBio) setOptimizedBio(history.data.optimizedBio);
-        if (history.data.nicheInput) setNicheInput(history.data.nicheInput);
-        if (history.data.hook) setHook(history.data.hook);
-        if (history.data.hashtags) setHashtags(history.data.hashtags);
-      }
-    };
-    loadData();
-  }, [deviceId]);
+    const bioInputSaved = localStorage.getItem('sg_bio_input');
+    const optimizedBioSaved = localStorage.getItem('sg_optimized_bio');
+    const nicheInputSaved = localStorage.getItem('sg_niche_input');
+    const hookSaved = localStorage.getItem('sg_hook');
+    const hashtagsSaved = localStorage.getItem('sg_hashtags');
+    if (bioInputSaved) setBioInput(bioInputSaved);
+    if (optimizedBioSaved) setOptimizedBio(optimizedBioSaved);
+    if (nicheInputSaved) setNicheInput(nicheInputSaved);
+    if (hookSaved) { try { setHook(JSON.parse(hookSaved)); } catch {} }
+    if (hashtagsSaved) { try { setHashtags(JSON.parse(hashtagsSaved)); } catch {} }
+  }, []);
 
   const navLinks = [
     { href: "#identity", label: "Identity" },
