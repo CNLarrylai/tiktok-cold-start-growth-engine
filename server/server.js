@@ -7,7 +7,7 @@ const { GoogleGenAI } = require("@google/genai");
 const db = require('./database');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -137,13 +137,19 @@ app.post('/api/identify', securityCheck, async (req, res) => {
                 hookData = typeof row.hook_data === 'string' ? JSON.parse(row.hook_data) : row.hook_data;
             } catch (e) { }
 
+            let hashtagData = null;
+            try {
+                hashtagData = typeof row.hashtags === 'string' ? JSON.parse(row.hashtags) : row.hashtags;
+            } catch (e) { }
+
             return res.json({
                 found: true,
                 data: {
                     bioInput: row.bio_input,
                     optimizedBio: row.optimized_bio,
                     nicheInput: row.niche_input,
-                    hook: hookData
+                    hook: hookData,
+                    hashtags: hashtagData
                 }
             });
         } else {
@@ -210,6 +216,41 @@ app.post('/api/generate-hook', securityCheck, async (req, res) => {
             topic: (error.message || "Stability").substring(0, 40),
             action: "wait 60s"
         });
+    }
+});
+
+// ---------------------------------------------------------
+// Generate Hashtags
+// ---------------------------------------------------------
+app.post('/api/generate-hashtags', securityCheck, async (req, res) => {
+    const { nicheInput, deviceId } = req.body;
+    if (!deviceId) return res.status(400).json({ error: 'Device ID missing' });
+
+    try {
+        const prompt = `Generate 20 high-performing TikTok hashtags for the "${nicheInput}" niche. Mix viral (#fyp, #foryou), niche-specific, and community hashtags. Return ONLY a valid JSON array of strings, no explanation. Example: ["#hashtag1", "#hashtag2"]`;
+        const rawResponse = await generateWithFallback(prompt, { responseMimeType: "application/json" });
+
+        let hashtags;
+        try {
+            const match = rawResponse.match(/\[[\s\S]*\]/);
+            hashtags = JSON.parse(match ? match[0] : rawResponse);
+            if (!Array.isArray(hashtags)) throw new Error("Not an array");
+            hashtags = hashtags.slice(0, 20);
+        } catch (e) {
+            hashtags = ["#fyp", "#foryou", "#viral", `#${nicheInput.toLowerCase().replace(/\s+/g, '')}`, "#tiktok", "#trending", "#creator"];
+        }
+
+        try {
+            await db.run(
+                "UPDATE users SET hashtags = $1, last_updated = CURRENT_TIMESTAMP WHERE user_id = $2",
+                [JSON.stringify(hashtags), deviceId]
+            );
+        } catch (err) { }
+
+        res.json({ hashtags });
+    } catch (error) {
+        console.error("Final Hashtag Error:", error);
+        res.json({ hashtags: ["#fyp", "#foryou", "#viral", "#tiktok", "#trending", "#creator"] });
     }
 });
 

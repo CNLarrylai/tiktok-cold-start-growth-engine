@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
-import { fixBio, generateHook, identifyUser } from './services/geminiService';
-import { BioComparison, ScriptHook, LiveMilestone } from './types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { fixBio, generateHook, identifyUser, generateHashtags } from './services/geminiService';
+import { ScriptHook, LiveMilestone } from './types';
 import { Analytics } from "@vercel/analytics/react"
 
 const getDeviceId = () => {
@@ -20,7 +20,43 @@ const LIVE_RUNSHEET: LiveMilestone[] = [
   { minute: 30, title: "CONVERSION CALL", description: "Drive traffic to the link in bio. Close the deal while the energy is high.", icon: "link", type: 'conversion' }
 ];
 
-const APP_VERSION = "v2.3-verified-fix";
+const APP_VERSION = "v3.0-hashtags";
+
+const CopyButton = ({ text, label = "Copy" }: { text: string; label?: string }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback for older browsers
+      const el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full transition-all ${
+        copied
+          ? 'bg-green-500/20 text-green-400 border border-green-500/40'
+          : 'bg-white/5 text-white/40 border border-white/10 hover:text-white hover:border-white/30'
+      }`}
+    >
+      <span className="material-symbols-outlined text-sm">{copied ? 'check' : 'content_copy'}</span>
+      {copied ? 'Copied!' : label}
+    </button>
+  );
+};
 
 export default function App() {
   const [bioInput, setBioInput] = useState("I post lifestyle, tech, and my dog. Welcome to my page! 📍 NYC");
@@ -31,7 +67,19 @@ export default function App() {
   const [hook, setHook] = useState<ScriptHook | null>(null);
   const [isGeneratingHook, setIsGeneratingHook] = useState(false);
 
+  const [hashtags, setHashtags] = useState<string[] | null>(null);
+  const [isGeneratingHashtags, setIsGeneratingHashtags] = useState(false);
+
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [hasScrolled, setHasScrolled] = useState(false);
+
   const [deviceId] = useState(getDeviceId());
+
+  useEffect(() => {
+    const onScroll = () => setHasScrolled(window.scrollY > 80);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const handleFixBio = async () => {
     setIsFixingBio(true);
@@ -53,8 +101,17 @@ export default function App() {
     }
   };
 
+  const handleGenerateHashtags = async () => {
+    setIsGeneratingHashtags(true);
+    try {
+      const tags = await generateHashtags(nicheInput, deviceId);
+      setHashtags(tags);
+    } finally {
+      setIsGeneratingHashtags(false);
+    }
+  };
+
   useEffect(() => {
-    // Load history or generate initial hook
     const loadData = async () => {
       const history = await identifyUser(deviceId);
       if (history.found && history.data) {
@@ -62,13 +119,18 @@ export default function App() {
         if (history.data.optimizedBio) setOptimizedBio(history.data.optimizedBio);
         if (history.data.nicheInput) setNicheInput(history.data.nicheInput);
         if (history.data.hook) setHook(history.data.hook);
-      } else {
-        // New user or no history - don't auto-generate to save quota
-        // handleGenerateHook();
+        if (history.data.hashtags) setHashtags(history.data.hashtags);
       }
     };
     loadData();
   }, [deviceId]);
+
+  const navLinks = [
+    { href: "#identity", label: "Identity" },
+    { href: "#hooks", label: "Hooks" },
+    { href: "#hashtags", label: "Hashtags" },
+    { href: "#retention", label: "Retention" },
+  ];
 
   return (
     <div className="min-h-screen grid-bg relative">
@@ -84,19 +146,53 @@ export default function App() {
               <span className="text-[10px] font-bold text-white/30 tracking-[0.2em]">{APP_VERSION}</span>
             </div>
           </div>
+
+          {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-10">
-            <a href="#identity" className="text-sm font-semibold hover:text-primary transition-colors uppercase tracking-widest">Identity</a>
-            <a href="#hooks" className="text-sm font-semibold hover:text-primary transition-colors uppercase tracking-widest">Hooks</a>
-            <a href="#retention" className="text-sm font-semibold hover:text-primary transition-colors uppercase tracking-widest">Retention</a>
+            {navLinks.map(link => (
+              <a key={link.href} href={link.href} className="text-sm font-semibold hover:text-primary transition-colors uppercase tracking-widest">
+                {link.label}
+              </a>
+            ))}
             <button className="bg-primary hover:bg-[#e0254a] transition-all px-6 py-2.5 rounded-full text-white text-sm font-bold tracking-wide shadow-lg">
               GET STARTED
             </button>
           </div>
+
+          {/* Mobile hamburger */}
+          <button
+            className="md:hidden flex flex-col gap-1.5 p-2"
+            onClick={() => setShowMobileMenu(v => !v)}
+            aria-label="Toggle menu"
+          >
+            <span className={`block w-6 h-0.5 bg-white transition-all duration-300 ${showMobileMenu ? 'rotate-45 translate-y-2' : ''}`} />
+            <span className={`block w-6 h-0.5 bg-white transition-all duration-300 ${showMobileMenu ? 'opacity-0' : ''}`} />
+            <span className={`block w-6 h-0.5 bg-white transition-all duration-300 ${showMobileMenu ? '-rotate-45 -translate-y-2' : ''}`} />
+          </button>
         </div>
+
+        {/* Mobile dropdown */}
+        {showMobileMenu && (
+          <div className="md:hidden bg-[#0a0506]/95 backdrop-blur-md border-t border-white/5 px-6 py-4 flex flex-col gap-4">
+            {navLinks.map(link => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="text-sm font-semibold hover:text-primary transition-colors uppercase tracking-widest py-2"
+                onClick={() => setShowMobileMenu(false)}
+              >
+                {link.label}
+              </a>
+            ))}
+            <button className="bg-primary text-white px-6 py-3 rounded-full text-sm font-bold tracking-wide w-full mt-2">
+              GET STARTED
+            </button>
+          </div>
+        )}
       </nav>
 
       <main className="pt-20">
-        {/* Hero / Identity Section */}
+        {/* Section 1: Identity / Bio */}
         <section id="identity" className="min-h-screen flex items-center justify-center px-6 py-20">
           <div className="max-w-[1100px] w-full grid md:grid-cols-2 gap-16 items-center">
             <div className="order-2 md:order-1 relative group">
@@ -143,18 +239,21 @@ export default function App() {
 
                   <div className={`transition-all duration-700 ${optimizedBio ? 'opacity-100 translate-y-0' : 'opacity-30 translate-y-4'}`}>
                     <div className="bg-primary/5 p-5 rounded-xl border border-primary/20">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="size-10 rounded-full ring-2 ring-primary bg-primary/20 flex items-center justify-center">
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className="size-10 rounded-full ring-2 ring-primary bg-primary/20 flex items-center justify-center shrink-0">
                           <span className="material-symbols-outlined text-primary">auto_awesome</span>
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <p className="text-xs text-white/90 leading-relaxed">
                             {optimizedBio || "Click the arrow to fix your bio instantly with AI."}
                           </p>
                         </div>
                       </div>
-                      <div className="py-1 px-3 bg-accent-cyan/10 rounded-lg text-[10px] text-accent-cyan font-bold uppercase tracking-tighter inline-block">
-                        Niche Authority: 100%
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="py-1 px-3 bg-accent-cyan/10 rounded-lg text-[10px] text-accent-cyan font-bold uppercase tracking-tighter inline-block">
+                          Niche Authority: 100%
+                        </div>
+                        {optimizedBio && <CopyButton text={optimizedBio} label="Copy Bio" />}
                       </div>
                     </div>
                   </div>
@@ -234,26 +333,102 @@ export default function App() {
                   )}
                 </div>
 
-                <div className="mt-12 flex flex-wrap gap-4">
-                  <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-5 py-2.5">
-                    <span className="text-lg">🔥</span>
-                    <span className="text-xs font-bold text-white/60 tracking-wider uppercase">Hype Hook</span>
+                <div className="mt-8 flex flex-wrap gap-4 items-center justify-between">
+                  <div className="flex flex-wrap gap-3">
+                    <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-5 py-2.5">
+                      <span className="text-lg">🔥</span>
+                      <span className="text-xs font-bold text-white/60 tracking-wider uppercase">Hype Hook</span>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-5 py-2.5">
+                      <span className="text-lg">🚀</span>
+                      <span className="text-xs font-bold text-white/60 tracking-wider uppercase">Viral Potential</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-5 py-2.5">
-                    <span className="text-lg">🚀</span>
-                    <span className="text-xs font-bold text-white/60 tracking-wider uppercase">Viral Potential</span>
-                  </div>
+                  {hook && (
+                    <CopyButton
+                      text={`"The secret to [${hook.result}] is actually [${hook.topic}] and most people are [${hook.action}]."`}
+                      label="Copy Script"
+                    />
+                  )}
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Section 3: Retention */}
-        <section id="retention" className="min-h-screen flex flex-col items-center justify-center px-6 py-20">
+        {/* Section 3: Hashtag Optimizer */}
+        <section id="hashtags" className="min-h-screen flex items-center justify-center px-6 py-20 border-y border-white/5">
+          <div className="max-w-[1100px] w-full grid md:grid-cols-2 gap-16 items-center">
+            <div className="relative group order-2 md:order-1">
+              <div className="absolute -inset-1 bg-gradient-to-r from-accent-cyan to-primary rounded-2xl blur opacity-20 group-hover:opacity-35 transition duration-1000"></div>
+              <div className="relative bg-card-bg border border-white/10 rounded-2xl p-8 shadow-2xl min-h-[320px]">
+                <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
+                  <span className="text-xs font-bold uppercase tracking-widest text-accent-cyan">Generated Hashtags</span>
+                  {hashtags && (
+                    <CopyButton text={hashtags.join(' ')} label="Copy All" />
+                  )}
+                </div>
+
+                {hashtags ? (
+                  <div className="flex flex-wrap gap-2">
+                    {hashtags.map((tag, i) => (
+                      <button
+                        key={i}
+                        onClick={() => navigator.clipboard?.writeText(tag)}
+                        className="text-sm font-bold px-3 py-1.5 rounded-full border transition-all hover:scale-105 active:scale-95"
+                        style={{
+                          color: i % 3 === 0 ? '#25F4EE' : i % 3 === 1 ? '#fe2a54' : 'rgba(255,255,255,0.7)',
+                          borderColor: i % 3 === 0 ? 'rgba(37,244,238,0.3)' : i % 3 === 1 ? 'rgba(254,42,84,0.3)' : 'rgba(255,255,255,0.1)',
+                          background: i % 3 === 0 ? 'rgba(37,244,238,0.08)' : i % 3 === 1 ? 'rgba(254,42,84,0.08)' : 'rgba(255,255,255,0.05)',
+                        }}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-48 gap-4 text-white/20">
+                    <span className="material-symbols-outlined text-5xl">tag</span>
+                    <p className="text-sm font-bold uppercase tracking-widest">Enter your niche and generate hashtags</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="order-1 md:order-2 space-y-8">
+              <h2 className="text-accent-cyan font-black uppercase tracking-widest text-sm">Section 3: The Hashtag Strategy</h2>
+              <h1 className="text-5xl md:text-7xl font-black leading-[0.9] tracking-tighter text-white">
+                STOP <span className="text-accent-cyan">GUESSING</span> YOUR TAGS
+              </h1>
+              <p className="text-lg text-slate-400 leading-relaxed max-w-md">
+                The right hashtag mix gets your content to the right eyeballs. Our AI generates a power blend of viral, niche, and community tags — tuned to your niche.
+              </p>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                <input
+                  type="text"
+                  value={nicheInput}
+                  onChange={(e) => setNicheInput(e.target.value)}
+                  placeholder="Enter your niche..."
+                  className="bg-white/5 border border-white/10 rounded-full px-6 py-4 text-white focus:border-accent-cyan outline-none transition-all flex-1"
+                />
+                <button
+                  onClick={handleGenerateHashtags}
+                  disabled={isGeneratingHashtags}
+                  className="group flex items-center justify-center gap-3 bg-white text-black px-8 py-4 rounded-full font-black uppercase tracking-widest hover:bg-accent-cyan transition-all shadow-xl"
+                >
+                  {isGeneratingHashtags ? 'Generating...' : 'Get Hashtags'}
+                  <span className={`material-symbols-outlined ${isGeneratingHashtags ? 'animate-spin' : 'group-hover:rotate-12'} transition-transform`}>tag</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 4: Retention / Live Runsheet */}
+        <section id="retention" className="min-h-screen flex flex-col items-center justify-center px-6 py-20 bg-background-dark/50 border-y border-white/5">
           <div className="max-w-[1100px] w-full">
             <div className="text-center mb-16 space-y-6">
-              <h2 className="text-primary font-black uppercase tracking-widest text-sm">Section 3: The Live Engagement</h2>
+              <h2 className="text-primary font-black uppercase tracking-widest text-sm">Section 4: The Live Engagement</h2>
               <h1 className="text-5xl md:text-8xl font-black leading-[0.8] tracking-tighter text-white">
                 STOP THE <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-accent-cyan to-primary animate-pulse-soft">AWKWARD SILENCE</span>
@@ -287,7 +462,7 @@ export default function App() {
                             }`}></div>
                         )}
                       </div>
-                      <div className={`pb-12 group`}>
+                      <div className="pb-12 group">
                         <h3 className={`text-2xl font-black transition-colors ${step.type === 'conversion' ? 'text-primary italic uppercase tracking-tighter' : 'text-white'
                           }`}>
                           Minute {step.minute}: {step.title}
@@ -346,8 +521,8 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Floating Scroll Indicator */}
-      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-40 pointer-events-none transition-opacity duration-500">
+      {/* Floating Scroll Indicator — hides after scroll */}
+      <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 z-40 pointer-events-none transition-opacity duration-500 ${hasScrolled ? 'opacity-0' : 'opacity-100'}`}>
         <div className="flex flex-col items-center gap-3">
           <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/30">Scroll to Explore</span>
           <div className="w-px h-16 bg-gradient-to-b from-primary/50 to-transparent"></div>

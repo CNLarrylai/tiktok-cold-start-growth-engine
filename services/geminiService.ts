@@ -51,3 +51,18 @@ export const generateHook = async (niche: string, deviceId: string) => {
     };
   }
 };
+
+export const generateHashtags = async (niche: string, deviceId: string): Promise<string[]> => {
+  try {
+    const res = await fetch(`${API_URL}/generate-hashtags`, {
+      method: 'POST',
+      headers: SECURITY_HEADERS,
+      body: JSON.stringify({ nicheInput: niche, deviceId })
+    });
+    const data = await res.json();
+    if (Array.isArray(data.hashtags)) return data.hashtags;
+    throw new Error("Invalid format");
+  } catch (e) {
+    return ["#fyp", "#foryou", "#viral", "#tiktok", "#trending", "#creator"];
+  }
+};
