@@ -1,6 +1,11 @@
 import { GoogleGenAI } from '@google/genai';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
+// Lazy init so the constructor runs inside the request, not at module load time
+let _ai: GoogleGenAI | null = null;
+function getAI() {
+  if (!_ai) _ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
+  return _ai;
+}
 
 const MODELS = [
   "gemma-3-27b-it",
@@ -24,7 +29,7 @@ export async function generateWithFallback(
       // Gemma models reject responseMimeType
       if (modelName.includes('gemma')) delete config.responseMimeType;
 
-      const response = await ai.models.generateContent({
+      const response = await getAI().models.generateContent({
         model: modelName,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config,
