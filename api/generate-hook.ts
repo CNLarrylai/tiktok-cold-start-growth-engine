@@ -1,7 +1,7 @@
 export const maxDuration = 30;
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash-8b', 'gemma-3-27b-it', 'gemma-3-12b-it'];
+const MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.0-flash-lite', 'gemma-4-31b-it', 'gemma-4-26b-a4b-it'];
 
 async function callAI(prompt: string, jsonMode = false): Promise<string> {
   const key = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
