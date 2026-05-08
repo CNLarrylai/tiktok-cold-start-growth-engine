@@ -1,7 +1,17 @@
-// Diagnostic: test which model IDs actually work with this API key
+// Diagnostic: list all models available for this API key + test specific ones
 export default async function handler(req: any, res: any) {
   const key = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
   const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+  // First: list all models this key can see
+  let availableModels: string[] = [];
+  try {
+    const listRes = await fetch(`${BASE}?key=${key}`);
+    const listData: any = await listRes.json();
+    availableModels = (listData.models || []).map((m: any) => m.name).filter((n: string) => n.includes('flash') || n.includes('gemma'));
+  } catch (e: any) {
+    availableModels = [`list-error: ${e.message}`];
+  }
 
   // Test both v1beta and v1 endpoints with various model IDs
   const candidates = [
@@ -41,5 +51,5 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  return res.json(results);
+  return res.json({ availableModels, probeResults: results });
 }
