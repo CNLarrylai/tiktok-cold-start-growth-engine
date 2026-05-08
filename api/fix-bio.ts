@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateWithFallback } from './_ai-helper';
+import { generateWithFallback } from '../lib/ai-helper';
 
 export const maxDuration = 30;
 
